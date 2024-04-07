@@ -1,0 +1,12 @@
+[package]
+name = "quvc-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.81"
+clap = { version = "4.5.4", features = ["derive"] }
+quinn = "0.10.2"
+quvc-common = { path = "../quvc-common" }
+rustls = { version = "0.21.0", features = ["quic"] }
+tokio = { version = "1.37.0", features = ["fs", "io-util", "macros", "rt-multi-thread"] }

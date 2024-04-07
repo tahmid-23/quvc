@@ -1,0 +1,8 @@
+[workspace]
+resolver = "1"
+
+members = [
+    "quvc-client",
+    "quvc-common",
+    "quvc-server"
+]

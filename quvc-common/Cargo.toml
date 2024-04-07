@@ -1,0 +1,10 @@
+[package]
+name = "quvc-common"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.81"
+libc = "0.2.153"
+nix = { version = "0.28.0", features = ["fs", "ioctl"] }
+tokio = { version = "1.37.0" }
