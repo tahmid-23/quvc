@@ -5,6 +5,7 @@ use clap::Parser;
 use quinn::{Connecting, Connection, Endpoint};
 use rustls::{Certificate, PrivateKey};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use quvc_common::tun_device::{TunReader, TunWriter};
 
@@ -57,7 +58,7 @@ async fn handle_connecting(tun_reader: TunReader, tun_writer: TunWriter, quic_co
     }
 }
 
-async fn handle_connection(mut tun_reader: TunReader, mut tun_writer: TunWriter, quic_connection: Connection) {
+async fn handle_connection(mut tun_reader: TunReader, tun_writer: TunWriter, quic_connection: Connection) {
     let mut tasks = JoinSet::new();
 
     {
@@ -67,19 +68,26 @@ async fn handle_connection(mut tun_reader: TunReader, mut tun_writer: TunWriter,
                 let mut buf = [0; 1500];
                 tun_reader.read(&mut buf).await.unwrap();
 
-                let mut stream = quic_connection.open_uni().await.unwrap();
-                stream.write_all(&buf).await.unwrap();
-                stream.finish().await.unwrap();
+                let quic_connection = quic_connection.clone();
+                tokio::spawn(async move {
+                    let mut stream = quic_connection.open_uni().await.unwrap();
+                    stream.write_all(&buf).await.unwrap();
+                    stream.finish().await.unwrap();
+                });
             }
         });
     }
 
+    let tun_writer = Arc::new(Mutex::new(tun_writer));
     tasks.spawn(async move {
         loop {
             let mut stream = quic_connection.accept_uni().await.unwrap();
             let buf = stream.read_to_end(1500).await.unwrap();
 
-            tun_writer.write_all(&buf).await.unwrap();
+            let tun_writer = tun_writer.clone();
+            tokio::spawn(async move {
+                tun_writer.lock().await.write_all(&buf).await.unwrap();
+            });
         }
     });
 

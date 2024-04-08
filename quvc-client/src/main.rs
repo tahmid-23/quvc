@@ -6,6 +6,7 @@ use clap::Parser;
 use quinn::{Endpoint, TransportConfig};
 use rustls::{Certificate, RootCertStore};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 #[derive(Parser)]
@@ -48,7 +49,8 @@ async fn main() {
         .expect("Failed to connect to QUIC server");
     let quic_connection = Arc::new(quic_connection);
 
-    let (mut tun_reader, mut tun_writer) = quvc_common::tun_device::new_tun("quvc").expect("Failed to create TUN device");
+    let (mut tun_reader, tun_writer) = quvc_common::tun_device::new_tun("quvc").expect("Failed to create TUN device");
+    let tun_writer = Arc::new(Mutex::new(tun_writer));
 
     let mut tasks = JoinSet::new();
 
@@ -59,9 +61,12 @@ async fn main() {
                 let mut buf = [0; 1500];
                 tun_reader.read(&mut buf).await.unwrap();
 
-                let mut stream = quic_connection.open_uni().await.unwrap();
-                stream.write_all(&buf).await.unwrap();
-                stream.finish().await.unwrap();
+                let quic_connection = quic_connection.clone();
+                tokio::spawn(async move {
+                    let mut stream = quic_connection.open_uni().await.unwrap();
+                    stream.write_all(&buf).await.unwrap();
+                    stream.finish().await.unwrap();
+                });
             }
         });
     }
@@ -71,7 +76,10 @@ async fn main() {
             let mut stream = quic_connection.accept_uni().await.unwrap();
             let buf = stream.read_to_end(1500).await.unwrap();
 
-            tun_writer.write_all(&buf).await.unwrap();
+            let tun_writer = tun_writer.clone();
+            tokio::spawn(async move {
+                tun_writer.lock().await.write_all(&buf).await.unwrap();
+            });
         }
     });
 
