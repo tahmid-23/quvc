@@ -6,10 +6,8 @@ use std::pin::Pin;
 use std::ptr::addr_of_mut;
 use std::sync::Arc;
 use std::task::{Context, Poll, ready};
-use anyhow::anyhow;
 use libc::{c_short, ifreq};
 use nix::fcntl::OFlag;
-use nix::{ioctl_write_int};
 use nix::sys::ioctl::ioctl_param_type;
 use nix::sys::stat::Mode;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -67,10 +65,10 @@ impl AsyncWrite for TunWriter {
 }
 
 pub fn new_tun(device_name: &str) -> Result<(TunReader, TunWriter), anyhow::Error> {
-    ioctl_write_int!(tunsetiff, b'T', 202);
+    nix::ioctl_write_int!(tunsetiff, b'T', 202);
 
     if device_name.len() > libc::IFNAMSIZ - 1 {
-        return Err(anyhow!("{} is too long of an interface name (max length {})", device_name, libc::IFNAMSIZ));
+        return Err(anyhow::anyhow!("{} is too long of an interface name (max length {})", device_name, libc::IFNAMSIZ));
     }
 
     let fd = nix::fcntl::open("/dev/net/tun", OFlag::O_RDWR, Mode::empty())?;

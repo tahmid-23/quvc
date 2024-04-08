@@ -3,12 +3,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use clap::Parser;
-use quinn::{Connection, Endpoint, TransportConfig};
+use quinn::{Endpoint, TransportConfig};
 use rustls::{Certificate, RootCertStore};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
-use bytes::Bytes;
-use quvc_common::tun_device::{TunReader, TunWriter};
 
 #[derive(Parser)]
 struct Cli {
@@ -51,40 +48,8 @@ async fn main() {
     let quic_connection = Arc::new(quic_connection);
 
     let (tun_reader, tun_writer) = quvc_common::tun_device::new_tun("quvc").expect("Failed to create TUN device");
-
-    let tun_to_quic_task = {
-        let quic_connection = quic_connection.clone();
-        tokio::spawn(async move {
-            tun_to_quic(tun_reader, &quic_connection).await
-        })
-    };
-    let quic_to_tun_task = tokio::spawn(async move {
-        quic_to_tun(&quic_connection, tun_writer).await
-    });
-
-    let _ = tokio::join!(tun_to_quic_task, quic_to_tun_task);
-}
-
-async fn tun_to_quic(mut tun_reader: TunReader, quic_connection: &Connection) {
-    let mut buf = [0; 1500];
-
-    loop {
-        let bytes_read = tun_reader.read(&mut buf).await.unwrap();
-        let bytes = Bytes::copy_from_slice(&buf[..bytes_read]);
-
-        quic_connection.send_datagram(bytes).unwrap();
-    }
-}
-
-async fn quic_to_tun(quic_connection: &Connection, tun_writer: TunWriter) {
+    let tun_reader = Arc::new(Mutex::new(tun_reader));
     let tun_writer = Arc::new(Mutex::new(tun_writer));
 
-    loop {
-        let datagram = quic_connection.read_datagram().await.unwrap();
-
-        let tun_writer = tun_writer.clone();
-        tokio::spawn(async move {
-            tun_writer.lock().await.write_all(&datagram).await.unwrap();
-        });
-    }
+    quvc_common::tunneling::handle_connection(tun_reader, tun_writer, &quic_connection).await;
 }
