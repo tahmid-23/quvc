@@ -74,10 +74,10 @@ async fn main() {
     tasks.spawn(async move {
         loop {
             let mut stream = quic_connection.accept_uni().await.unwrap();
-            let buf = stream.read_to_end(1500).await.unwrap();
 
             let tun_writer = tun_writer.clone();
             tokio::spawn(async move {
+                let buf = stream.read_to_end(1500).await.unwrap();
                 tun_writer.lock().await.write_all(&buf).await.unwrap();
             });
         }
