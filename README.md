@@ -15,15 +15,19 @@ Compile the server with `cargo build --package quvc-server --release`.
 
 2. Then, set up TUN interfaces on the client and the server. These should be part of the same private network.
 
+   Additionally, you want to set the MTU to be sufficiently below the MTU of your outbound interface.
+
    For example, on the client:
    ```
    ip tuntap add quvc mode tun
+   ip link set mtu 1000 dev quvc
    ip address add 10.69.42.1/24 dev quvc
    ```
 
    On the server:
    ```
    ip tuntap add quvc mode tun
+   ip link set mtu 1000 dev quvc
    ip address add 10.69.42.2/24 dev quvc
    ```
 

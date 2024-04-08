@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.81"
+bytes = "1.6.0"
 clap = { version = "4.5.4", features = ["derive"] }
 quinn = "0.10.2"
 quvc-common = { path = "../quvc-common" }

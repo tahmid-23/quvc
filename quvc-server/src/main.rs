@@ -1,12 +1,12 @@
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
+use bytes::Bytes;
 use clap::Parser;
 use quinn::{Connecting, Connection, Endpoint};
 use rustls::{Certificate, PrivateKey};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
-use tokio::task::JoinSet;
 use quvc_common::tun_device::{TunReader, TunWriter};
 
 #[derive(Parser)]
@@ -16,7 +16,7 @@ struct Cli {
     #[arg(short, long, value_name = "FILE", default_value = "key.der")]
     key_path: PathBuf,
     #[arg(short, long, default_value = "8000")]
-    port: u16
+    port: u16,
 }
 
 #[tokio::main]
@@ -58,41 +58,41 @@ async fn handle_connecting(tun_reader: TunReader, tun_writer: TunWriter, quic_co
     }
 }
 
-async fn handle_connection(mut tun_reader: TunReader, tun_writer: TunWriter, quic_connection: Connection) {
-    let mut tasks = JoinSet::new();
+async fn tun_to_quic(mut tun_reader: TunReader, quic_connection: &Connection) {
+    let mut buf = [0; 1500];
 
-    {
-        let quic_connection = quic_connection.clone();
-        tasks.spawn(async move {
-            loop {
-                let mut buf = [0; 1500];
-                tun_reader.read(&mut buf).await.unwrap();
+    loop {
+        let bytes_read = tun_reader.read(&mut buf).await.unwrap();
+        let bytes = Bytes::copy_from_slice(&buf[..bytes_read]);
 
-                let quic_connection = quic_connection.clone();
-                tokio::spawn(async move {
-                    let mut stream = quic_connection.open_uni().await.unwrap();
-                    stream.write_all(&buf).await.unwrap();
-                    stream.finish().await.unwrap();
-                });
-            }
+        quic_connection.send_datagram(bytes).unwrap();
+    }
+}
+
+async fn quic_to_tun(quic_connection: &Connection, tun_writer: TunWriter) {
+    let tun_writer = Arc::new(Mutex::new(tun_writer));
+
+    loop {
+        let datagram = quic_connection.read_datagram().await.unwrap();
+
+        let tun_writer = tun_writer.clone();
+        tokio::spawn(async move {
+            tun_writer.lock().await.write_all(&datagram).await.unwrap();
         });
     }
+}
 
-    let tun_writer = Arc::new(Mutex::new(tun_writer));
-    tasks.spawn(async move {
-        loop {
-            let mut stream = quic_connection.accept_uni().await.unwrap();
-
-            let tun_writer = tun_writer.clone();
-            tokio::spawn(async move {
-                let buf = stream.read_to_end(1500).await.unwrap();
-                tun_writer.lock().await.write_all(&buf).await.unwrap();
-            });
-        }
+async fn handle_connection(tun_reader: TunReader, tun_writer: TunWriter, quic_connection: Connection) {
+    let tun_to_quic_task = {
+        let quic_connection = quic_connection.clone();
+        tokio::spawn(async move {
+            tun_to_quic(tun_reader, &quic_connection).await
+        })
+    };
+    let quic_to_tun_task = tokio::spawn(async move {
+        quic_to_tun(&quic_connection, tun_writer).await
     });
 
-    while let Some(_) = tasks.join_next().await {
-
-    }
+    let _ = tokio::join!(tun_to_quic_task, quic_to_tun_task);
 }
 
