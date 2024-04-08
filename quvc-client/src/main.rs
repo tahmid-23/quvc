@@ -7,7 +7,6 @@ use quinn::{Endpoint, TransportConfig};
 use rustls::{Certificate, RootCertStore};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::task::JoinSet;
-use quvc_common::tun_device::TunDevice;
 
 #[derive(Parser)]
 struct Cli {
@@ -49,8 +48,7 @@ async fn main() {
         .expect("Failed to connect to QUIC server");
     let quic_connection = Arc::new(quic_connection);
 
-    let tun_device = TunDevice::new("quvc").expect("Failed to create TUN device");
-    let (mut tun_read, mut tun_write) = tokio::io::split(tun_device);
+    let (mut tun_reader, mut tun_writer) = quvc_common::tun_device::new_tun("quvc").expect("Failed to create TUN device");
 
     let mut tasks = JoinSet::new();
 
@@ -59,7 +57,7 @@ async fn main() {
         tasks.spawn(async move {
             loop {
                 let mut buf = [0; 1500];
-                tun_read.read(&mut buf).await.unwrap();
+                tun_reader.read(&mut buf).await.unwrap();
 
                 let mut stream = quic_connection.open_uni().await.unwrap();
                 stream.write_all(&buf).await.unwrap();
@@ -73,7 +71,7 @@ async fn main() {
             let mut stream = quic_connection.accept_uni().await.unwrap();
             let buf = stream.read_to_end(1500).await.unwrap();
 
-            tun_write.write_all(&buf).await.unwrap();
+            tun_writer.write_all(&buf).await.unwrap();
         }
     });
 
