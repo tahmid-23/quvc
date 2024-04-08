@@ -39,6 +39,12 @@ Compile the server with `cargo build --package quvc-server --release`.
    iptables -t nat -A POSTROUTING -s 10.69.42.0/24 -o <INTERFACE> -j MASQUERADE
    ```
 
+   If you want to redirect DNS (you probably do), run the following:
+   ```
+   iptables -t nat -A PREROUTING -s 10.69.42.0/24 -p udp --dport 53 -j DNAT --to 1.1.1.1:53
+   iptables -t nat -A PREROUTING -s 10.69.42.0/24 -p tcp --dport 53 -j DNAT --to 1.1.1.1:53
+   ```
+
 4. Run the VPN server and client. Check usage on each of the binaries for more information.
 
 6. Set up routing on the client to go through the TUN device.
