@@ -21,6 +21,7 @@ Compile the server with `cargo build --package quvc-server --release`.
    ```
    ip tuntap add quvc mode tun
    ip link set mtu 1000 dev quvc
+   ip link set quvc up
    ip address add 10.69.42.1/24 dev quvc
    ```
 
@@ -28,6 +29,7 @@ Compile the server with `cargo build --package quvc-server --release`.
    ```
    ip tuntap add quvc mode tun
    ip link set mtu 1000 dev quvc
+   ip link set quvc up
    ip address add 10.69.42.2/24 dev quvc
    ```
 
