@@ -6,7 +6,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc::UnboundedSender;
 use crate::tun_device::{TunReader, TunWriter};
 
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct TCPKey {
     src_ip: u32,
     dst_ip: u32,
@@ -31,8 +31,9 @@ async fn tun_to_quic_transfer(tun_reader: &mut TunReader, quic_connection: &Conn
                 dst_port,
             };
 
-            let stream_opt = streams.entry(key).or_insert(None);
+            let stream_opt = streams.entry(key.clone()).or_insert(None);
             if stream_opt.is_none() {
+                println!("opening new stream: {:?}", key);
                 match quic_connection.open_uni().await {
                     Ok(new_stream) => {
                         *stream_opt = Some(new_stream);

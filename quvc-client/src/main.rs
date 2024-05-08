@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use clap::Parser;
-use quinn::{Endpoint, TransportConfig};
+use quinn::{Endpoint, TransportConfig, VarInt};
 use rustls::{Certificate, RootCertStore};
 use tokio::sync::Mutex;
 
@@ -36,6 +36,7 @@ async fn main() {
     let mut config = quinn::ClientConfig::new(Arc::new(crypto));
     let mut transport_config = TransportConfig::default();
     transport_config.keep_alive_interval(Some(Duration::from_secs(1)));
+    transport_config.max_concurrent_uni_streams(VarInt::from_u32(8192));
     config.transport_config(Arc::new(transport_config));
 
     let mut quic_endpoint = Endpoint::client(SocketAddr::from((Ipv4Addr::from(0), 0)))

@@ -1,8 +1,9 @@
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use clap::Parser;
-use quinn::Endpoint;
+use quinn::{Endpoint, TransportConfig, VarInt};
 use rustls::{Certificate, PrivateKey};
 use tokio::sync::Mutex;
 
@@ -33,7 +34,11 @@ async fn main() {
         .with_no_client_auth()
         .with_single_cert(vec![cert], key)
         .unwrap();
-    let config = quinn::ServerConfig::with_crypto(Arc::new(crypto));
+    let mut config = quinn::ServerConfig::with_crypto(Arc::new(crypto));
+    let mut transport_config = TransportConfig::default();
+    transport_config.keep_alive_interval(Some(Duration::from_secs(1)));
+    transport_config.max_concurrent_uni_streams(VarInt::from_u32(8192));
+    config.transport_config(Arc::new(transport_config));
     let quic_endpoint = Endpoint::server(config, SocketAddr::from((Ipv4Addr::from(0), cli.port)))
         .expect("Failed to create QUIC server");
 
